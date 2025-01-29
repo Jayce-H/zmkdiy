@@ -25,7 +25,11 @@
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/usb_conn_state_changed.h>
 #include <zmk/workqueue.h>
-
+//
+#include <zmk/endpoints.h>
+#include <zmk/keymap.h>
+#include <zmk/led_strip.h>
+//
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if !DT_HAS_CHOSEN(zmk_underglow)
@@ -41,6 +45,14 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define SAT_MAX 100
 #define BRT_MAX 100
 
+//
+#define MAX_RIPPLES 5
+#define RIPPLE_DURATION 1000 // ms
+#define RIPPLE_RADIUS 3
+static int ripple_center = -1;
+static int ripple_step = 0;
+//
+
 BUILD_ASSERT(CONFIG_ZMK_RGB_UNDERGLOW_BRT_MIN <= CONFIG_ZMK_RGB_UNDERGLOW_BRT_MAX,
              "ERROR: RGB underglow maximum brightness is less than minimum brightness");
 
@@ -49,6 +61,7 @@ enum rgb_underglow_effect {
     UNDERGLOW_EFFECT_BREATHE,
     UNDERGLOW_EFFECT_SPECTRUM,
     UNDERGLOW_EFFECT_SWIRL,
+    UNDERGLOW_EFFECT_WAVE,//
     UNDERGLOW_EFFECT_NUMBER // Used to track number of underglow effects
 };
 
@@ -59,6 +72,17 @@ struct rgb_underglow_state {
     uint16_t animation_step;
     bool on;
 };
+
+//
+struct ripple {
+    uint8_t x;
+    uint8_t y;
+    int64_t start_time;
+    bool active;
+};
+
+struct ripple ripples[MAX_RIPPLES];
+//
 
 static const struct device *led_strip;
 
@@ -175,6 +199,41 @@ static void zmk_rgb_underglow_effect_swirl(void) {
     state.animation_step = state.animation_step % HUE_MAX;
 }
 
+//
+static void zmk_rgb_underglow_effect_wave(void){
+    struct zmk_led_hsb hsb = state.color;
+    if (ripple_center == -1){
+        for (int i = 0; i < STRIP_NUM_PIXELS; i++) {
+            hsb.b=0;
+            pixels[i] = hsb_to_rgb(hsb_scale_zero_max(hsb));
+        }
+    } else{
+        for (int i = 0; i < STRIP_NUM_PIXELS; i++){
+            int distance = abs(i - ripple_center);
+            if (distance == ripple_step) {
+                hsb.b = 100;
+                pixels[i] = hsb_to_rgb(hsb_scale_zero_max(hsb));
+            }else if (distance < ripple_step) {
+                hsb.b = 100 /  (ripple_step - distance + 1);
+                pixels[i] = hsb_to_rgb(hsb_scale_zero_max(hsb));
+            }else {
+                hsb.b = 0;
+                pixels[i] = hsb_to_rgb(hsb_scale_zero_max(hsb));
+            }
+        }
+        ripple_step++;
+        if (ripple_step > STRIP_NUM_PIXELS) {
+            ripple_center = -1;
+            ripple_step = 0;
+        }
+    } 
+}
+void trigger_ripple(int key_position) {
+    ripple_center = key_position;
+    ripple_step = 0;
+}
+//
+
 static void zmk_rgb_underglow_tick(struct k_work *work) {
     switch (state.current_effect) {
     case UNDERGLOW_EFFECT_SOLID:
@@ -188,6 +247,9 @@ static void zmk_rgb_underglow_tick(struct k_work *work) {
         break;
     case UNDERGLOW_EFFECT_SWIRL:
         zmk_rgb_underglow_effect_swirl();
+        break;
+    case UNDERGLOW_EFFECT_WAVE:
+        zmk_rgb_underglow_effect_wave();
         break;
     }
 
