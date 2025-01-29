@@ -232,6 +232,19 @@ void trigger_ripple(int key_position) {
     ripple_center = key_position;
     ripple_step = 0;
 }
+// 绑定按键事件
+const struct zmk_keymap_item keymap[] = {
+    {KEY_Y, MOD_NONE, trigger_ripple(0)},
+    {KEY_U, MOD_NONE, trigger_ripple(1)},
+    {KEY_I, MOD_NONE, trigger_ripple(2)},
+    {KEY_O, MOD_NONE, trigger_ripple(3)},
+    {KEY_P, MOD_NONE, trigger_ripple(4)},
+    {KEY_H, MOD_NONE, trigger_ripple(5)},
+    {KEY_J, MOD_NONE, trigger_ripple(6)},
+    {KEY_K, MOD_NONE, trigger_ripple(7)},
+    {KEY_L, MOD_NONE, trigger_ripple(8)},
+    {KEY_N, MOD_NONE, trigger_ripple(10)},
+};
 //
 
 static void zmk_rgb_underglow_tick(struct k_work *work) {
